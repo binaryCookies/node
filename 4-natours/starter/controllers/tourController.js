@@ -10,22 +10,40 @@ const Tour = require('../model/tourModel');
 
 module.exports.getAllTours = async (req, res) => {
   try {
-    //* hard copy of req.query
+    //* Filtering
+    //* 1a) - Build the query - saving a hard copy of req.query
     const queryObj = { ...req.query };
     const excludedFields = ['page', 'sort', 'limit', 'fields'];
     //* delete from the queryObj the elements of the array in excluded fields
     excludedFields.forEach((el) => delete queryObj[el]);
-    // console.log(req.requestTime);
     // console.log(req.query, queryObj);
+
+    //* 1b)  Advanced FIletering
+    // to use replace() stringify queryObj
+    let queryStr = JSON.stringify(queryObj);
+    // use callback to pass the matched string and add the operartor $ for mongoDB
+    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
+
+    // (await the query below. Why? in order to chain other methods to the query.
+    // If we await the query it is not possible to chain methods )
+    let query = Tour.find(JSON.parse(queryStr));
+
+    //* 2) Sorting
+    if (req.query.sort) {
+      const sortBy = req.query.sort.split(',').join(' ');
+      //? SORT mongoose docs: If a string is passed, it must be a space delimited list of path names.
+      // console.log(sortBy);
+      query = query.sort(sortBy);
+    } else {
+      //set default descending order
+      query = query.sort('-createdAt');
+    }
+
+    //*- Execute the query
+    const tours = await query;
 
     //* MongoDB filter
     // const tours = await Tour.find({ duration: 5, difficulty: 'easy' });
-
-    //* Query String filter
-    //* 1 - Build the query
-    // (await the query below. Why? in order to chain other methods to the query.
-    // If we await the query it is not possible to chain methods )
-    const query = Tour.find(queryObj);
 
     //* Mongoose Filter
     // const query = await Tour.find()
@@ -33,9 +51,6 @@ module.exports.getAllTours = async (req, res) => {
     //   .equals(5)
     //   .where('difficulty')
     //   .equals('easy');
-
-    //* 2 - Execute the query
-    const tours = await query;
 
     //* Send the response
     res.status(200).json({
